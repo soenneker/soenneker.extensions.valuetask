@@ -8,5 +8,5 @@
 ## Installation
 
 ```
-Install-Package Soenneker.Extensions.ValueTask
+dotnet add package Soenneker.Extensions.ValueTask
 ```
