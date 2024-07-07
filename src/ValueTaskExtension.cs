@@ -9,16 +9,25 @@ namespace Soenneker.Extensions.ValueTask;
 public static class ValueTaskExtension
 {
     /// <summary>
-    /// Equivalent to <code>valueTask.ConfigureAwait(false);</code>
+    /// Configures an awaiter used to await this <see cref="ValueTask"/> to continue on a different context.
+    /// Equivalent to <code>valueTask.ConfigureAwait(false);</code>.
     /// </summary>
+    /// <param name="valueTask">The <see cref="ValueTask"/> to configure.</param>
+    /// <returns>A configured awaitable.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ConfiguredValueTaskAwaitable NoSync(this System.Threading.Tasks.ValueTask valueTask)
     {
         return valueTask.ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Equivalent to <code>valueTask.ConfigureAwait(false);</code>
+    /// Configures an awaiter used to await this <see cref="ValueTask{T}"/> to continue on a different context.
+    /// Equivalent to <code>valueTask.ConfigureAwait(false);</code>.
     /// </summary>
+    /// <typeparam name="T">The type of the result produced by this <see cref="ValueTask{T}"/>.</typeparam>
+    /// <param name="valueTask">The <see cref="ValueTask{T}"/> to configure.</param>
+    /// <returns>A configured awaitable.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ConfiguredValueTaskAwaitable<T> NoSync<T>(this ValueTask<T> valueTask)
     {
         return valueTask.ConfigureAwait(false);
