@@ -14,7 +14,6 @@ public static class ValueTaskExtension
     /// </summary>
     /// <param name="valueTask">The <see cref="ValueTask"/> to configure.</param>
     /// <returns>A configured awaitable.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ConfiguredValueTaskAwaitable NoSync(this System.Threading.Tasks.ValueTask valueTask)
     {
         return valueTask.ConfigureAwait(false);
@@ -27,7 +26,6 @@ public static class ValueTaskExtension
     /// <typeparam name="T">The type of the result produced by this <see cref="ValueTask{T}"/>.</typeparam>
     /// <param name="valueTask">The <see cref="ValueTask{T}"/> to configure.</param>
     /// <returns>A configured awaitable.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ConfiguredValueTaskAwaitable<T> NoSync<T>(this ValueTask<T> valueTask)
     {
         return valueTask.ConfigureAwait(false);
