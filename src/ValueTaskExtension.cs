@@ -41,7 +41,7 @@ public static class ValueTaskExtension
     /// If the <see cref="ValueTask{T}"/> has not yet completed, this method will block the calling thread
     /// until it does. This may lead to deadlocks if called on a context that does not allow synchronous blocking.
     /// </remarks>
-    public static T RunSync<T>(this ValueTask<T> valueTask)
+    public static T AwaitSync<T>(this ValueTask<T> valueTask)
     {
         return valueTask.IsCompletedSuccessfully
             ? valueTask.Result
@@ -56,7 +56,7 @@ public static class ValueTaskExtension
     /// If the <see cref="ValueTask"/> has not yet completed, this method will block the calling thread
     /// until it does. This may lead to deadlocks if called on a context that does not allow synchronous blocking.
     /// </remarks>
-    public static void RunSync(this System.Threading.Tasks.ValueTask valueTask)
+    public static void AwaitSync(this System.Threading.Tasks.ValueTask valueTask)
     {
         if (!valueTask.IsCompletedSuccessfully)
             valueTask.AsTask().GetAwaiter().GetResult();
