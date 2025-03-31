@@ -68,6 +68,42 @@ public static class ValueTaskExtension
     /// Executes an asynchronous <see cref="ValueTask"/> operation in a synchronous context by offloading it to a background thread,
     /// avoiding potential deadlocks that can occur when blocking on async code (e.g., on the UI thread).
     /// </summary>
+    /// <param name="func">The asynchronous operation to execute.</param>
+    /// <remarks>
+    /// This method is useful in contexts where asynchronous code must be invoked synchronously (e.g., in constructors,
+    /// event handlers, or system callbacks such as BroadcastReceivers). The operation is executed on the thread pool
+    /// using <see cref="Task.Run(System.Action)"/>, which helps prevent common deadlock scenarios caused by
+    /// synchronously waiting on async operations that capture a synchronization context.
+    /// </remarks>
+    /// <exception cref="AggregateException">Thrown if the task faults and throws an exception.</exception>
+    public static void AwaitSyncSafe(this Func<System.Threading.Tasks.ValueTask> func)
+    {
+        Task.Run(async () => await func().NoSync()).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Executes an asynchronous <see cref="ValueTask{TResult}"/> operation in a synchronous context by offloading it to a background thread,
+    /// avoiding potential deadlocks that can occur when blocking on async code (e.g., on the UI thread).
+    /// </summary>
+    /// <typeparam name="T">The type of result returned by the asynchronous operation.</typeparam>
+    /// <param name="func">The asynchronous operation to execute, returning a <see cref="ValueTask{TResult}"/>.</param>
+    /// <returns>The result of the asynchronous operation.</returns>
+    /// <remarks>
+    /// This method is useful in contexts where asynchronous code must be invoked synchronously (e.g., in constructors,
+    /// event handlers, or system callbacks such as BroadcastReceivers). The operation is executed on the thread pool
+    /// using <see cref="Task.Run(System.Func{Task{TResult}})"/>, which helps prevent common deadlock scenarios caused by
+    /// synchronously waiting on async operations that capture a synchronization context.
+    /// </remarks>
+    /// <exception cref="AggregateException">Thrown if the task faults and throws an exception.</exception>
+    public static T AwaitSyncSafe<T>(this Func<ValueTask<T>> func)
+    {
+        return Task.Run(async () => await func().NoSync()).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Executes an asynchronous <see cref="ValueTask"/> operation in a synchronous context by offloading it to a background thread,
+    /// avoiding potential deadlocks that can occur when blocking on async code (e.g., on the UI thread).
+    /// </summary>
     /// <param name="func">The asynchronous operation to execute, accepting a <see cref="CancellationToken"/>.</param>
     /// <param name="cancellationToken">An optional cancellation token to observe during execution.</param>
     /// <remarks>
