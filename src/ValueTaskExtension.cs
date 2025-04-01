@@ -65,78 +65,38 @@ public static class ValueTaskExtension
     }
 
     /// <summary>
-    /// Executes an asynchronous <see cref="ValueTask"/> operation in a synchronous context by offloading it to a background thread,
-    /// avoiding potential deadlocks that can occur when blocking on async code (e.g., on the UI thread).
+    /// Synchronously waits for a <see cref="ValueTask"/> to complete in a safe manner,
+    /// avoiding deadlocks by offloading the execution to a background thread and not capturing the synchronization context.
     /// </summary>
-    /// <param name="func">The asynchronous operation to execute.</param>
+    /// <param name="valueTask">The <see cref="ValueTask"/> to wait for.</param>
+    /// <param name="cancellationToken">An optional <see cref="CancellationToken"/> to cancel the background operation.</param>
+    /// <exception cref="OperationCanceledException">Thrown if the operation is canceled via the provided token.</exception>
+    /// <exception cref="AggregateException">Thrown if the task faults; inner exceptions contain the actual errors.</exception>
     /// <remarks>
-    /// This method is useful in contexts where asynchronous code must be invoked synchronously (e.g., in constructors,
-    /// event handlers, or system callbacks such as BroadcastReceivers). The operation is executed on the thread pool
-    /// using <see cref="Task.Run(System.Action)"/>, which helps prevent common deadlock scenarios caused by
-    /// synchronously waiting on async operations that capture a synchronization context.
+    /// This method should be used when asynchronous code must be waited on from synchronous contexts, such as in constructors or legacy APIs,
+    /// without risking deadlocks commonly caused by synchronization context capture (e.g., UI threads or ASP.NET).
     /// </remarks>
-    /// <exception cref="AggregateException">Thrown if the task faults and throws an exception.</exception>
-    public static void AwaitSyncSafe(this Func<System.Threading.Tasks.ValueTask> func)
+    public static void AwaitSyncSafe(this System.Threading.Tasks.ValueTask valueTask, CancellationToken cancellationToken = default)
     {
-        Task.Run(async () => await func().NoSync()).GetAwaiter().GetResult();
+        Task.Run(async () => await valueTask.NoSync(), cancellationToken).GetAwaiter().GetResult();
     }
 
     /// <summary>
-    /// Executes an asynchronous <see cref="ValueTask{TResult}"/> operation in a synchronous context by offloading it to a background thread,
-    /// avoiding potential deadlocks that can occur when blocking on async code (e.g., on the UI thread).
+    /// Synchronously waits for a <see cref="ValueTask{TResult}"/> to complete and returns its result in a safe manner,
+    /// avoiding deadlocks by offloading the execution to a background thread and not capturing the synchronization context.
     /// </summary>
-    /// <typeparam name="T">The type of result returned by the asynchronous operation.</typeparam>
-    /// <param name="func">The asynchronous operation to execute, returning a <see cref="ValueTask{TResult}"/>.</param>
-    /// <returns>The result of the asynchronous operation.</returns>
+    /// <typeparam name="T">The result type of the <see cref="ValueTask{TResult}"/>.</typeparam>
+    /// <param name="valueTask">The <see cref="ValueTask{TResult}"/> to wait for.</param>
+    /// <param name="cancellationToken">An optional <see cref="CancellationToken"/> to cancel the background operation.</param>
+    /// <returns>The result of the completed task.</returns>
+    /// <exception cref="OperationCanceledException">Thrown if the operation is canceled via the provided token.</exception>
+    /// <exception cref="AggregateException">Thrown if the task faults; inner exceptions contain the actual errors.</exception>
     /// <remarks>
-    /// This method is useful in contexts where asynchronous code must be invoked synchronously (e.g., in constructors,
-    /// event handlers, or system callbacks such as BroadcastReceivers). The operation is executed on the thread pool
-    /// using <see cref="Task.Run(System.Func{Task{TResult}})"/>, which helps prevent common deadlock scenarios caused by
-    /// synchronously waiting on async operations that capture a synchronization context.
+    /// This method is useful when you must synchronously retrieve the result of asynchronous code, such as in library code or integration with legacy systems,
+    /// without risking deadlocks due to synchronization context capture.
     /// </remarks>
-    /// <exception cref="AggregateException">Thrown if the task faults and throws an exception.</exception>
-    public static T AwaitSyncSafe<T>(this Func<ValueTask<T>> func)
+    public static T AwaitSyncSafe<T>(this ValueTask<T> valueTask, CancellationToken cancellationToken = default)
     {
-        return Task.Run(async () => await func().NoSync()).GetAwaiter().GetResult();
-    }
-
-    /// <summary>
-    /// Executes an asynchronous <see cref="ValueTask"/> operation in a synchronous context by offloading it to a background thread,
-    /// avoiding potential deadlocks that can occur when blocking on async code (e.g., on the UI thread).
-    /// </summary>
-    /// <param name="func">The asynchronous operation to execute, accepting a <see cref="CancellationToken"/>.</param>
-    /// <param name="cancellationToken">An optional cancellation token to observe during execution.</param>
-    /// <remarks>
-    /// This method is useful in contexts where asynchronous code must be invoked synchronously (e.g., in constructors,
-    /// event handlers, or system callbacks such as BroadcastReceivers). The operation is executed on the thread pool
-    /// using <see cref="Task.Run(System.Action)"/>, which helps prevent common deadlock scenarios caused by
-    /// synchronously waiting on async operations that capture a synchronization context.
-    /// </remarks>
-    /// <exception cref="OperationCanceledException">Thrown if the task is canceled via the provided <paramref name="cancellationToken"/>.</exception>
-    /// <exception cref="AggregateException">Thrown if the task faults and throws an exception.</exception>
-    public static void AwaitSyncSafe(this Func<CancellationToken, System.Threading.Tasks.ValueTask> func, CancellationToken cancellationToken = default)
-    {
-        Task.Run(async () => await func(cancellationToken).NoSync(), cancellationToken).GetAwaiter().GetResult();
-    }
-
-    /// <summary>
-    /// Executes an asynchronous <see cref="ValueTask{TResult}"/> operation in a synchronous context by offloading it to a background thread,
-    /// avoiding potential deadlocks that can occur when blocking on async code (e.g., on the UI thread).
-    /// </summary>
-    /// <typeparam name="T">The type of result returned by the asynchronous operation.</typeparam>
-    /// <param name="func">The asynchronous operation to execute, accepting a <see cref="CancellationToken"/> and returning a <see cref="ValueTask{TResult}"/>.</param>
-    /// <param name="cancellationToken">An optional cancellation token to observe during execution.</param>
-    /// <returns>The result of the asynchronous operation.</returns>
-    /// <remarks>
-    /// This method is useful in contexts where asynchronous code must be invoked synchronously (e.g., in constructors,
-    /// event handlers, or system callbacks such as BroadcastReceivers). The operation is executed on the thread pool
-    /// using <see cref="Task.Run(System.Func{Task{TResult}})"/>, which helps prevent common deadlock scenarios caused by
-    /// synchronously waiting on async operations that capture a synchronization context.
-    /// </remarks>
-    /// <exception cref="OperationCanceledException">Thrown if the task is canceled via the provided <paramref name="cancellationToken"/>.</exception>
-    /// <exception cref="AggregateException">Thrown if the task faults and throws an exception.</exception>
-    public static T AwaitSyncSafe<T>(this Func<CancellationToken, ValueTask<T>> func, CancellationToken cancellationToken = default)
-    {
-        return Task.Run(async () => await func(cancellationToken).NoSync(), cancellationToken).GetAwaiter().GetResult();
+        return Task.Run(async () => await valueTask.NoSync(), cancellationToken).GetAwaiter().GetResult();
     }
 }
