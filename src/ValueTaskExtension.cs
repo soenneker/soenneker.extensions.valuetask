@@ -16,6 +16,7 @@ public static class ValueTaskExtension
     /// </summary>
     /// <param name="valueTask">The <see cref="ValueTask"/> to configure.</param>
     /// <returns>A configured awaitable.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ConfiguredValueTaskAwaitable NoSync(this System.Threading.Tasks.ValueTask valueTask)
     {
         return valueTask.ConfigureAwait(false);
@@ -28,6 +29,7 @@ public static class ValueTaskExtension
     /// <typeparam name="T">The type of the result produced by this <see cref="ValueTask{T}"/>.</typeparam>
     /// <param name="valueTask">The <see cref="ValueTask{T}"/> to configure.</param>
     /// <returns>A configured awaitable.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ConfiguredValueTaskAwaitable<T> NoSync<T>(this ValueTask<T> valueTask)
     {
         return valueTask.ConfigureAwait(false);
@@ -43,11 +45,14 @@ public static class ValueTaskExtension
     /// If the <see cref="ValueTask{T}"/> has not yet completed, this method will block the calling thread
     /// until it does. This may lead to deadlocks if called on a context that does not allow synchronous blocking.
     /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static T AwaitSync<T>(this ValueTask<T> valueTask)
     {
         return valueTask.IsCompletedSuccessfully
             ? valueTask.Result
-            : valueTask.AsTask().GetAwaiter().GetResult();
+            : valueTask.AsTask()
+                       .GetAwaiter()
+                       .GetResult();
     }
 
     /// <summary>
@@ -58,10 +63,13 @@ public static class ValueTaskExtension
     /// If the <see cref="ValueTask"/> has not yet completed, this method will block the calling thread
     /// until it does. This may lead to deadlocks if called on a context that does not allow synchronous blocking.
     /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void AwaitSync(this System.Threading.Tasks.ValueTask valueTask)
     {
         if (!valueTask.IsCompletedSuccessfully)
-            valueTask.AsTask().GetAwaiter().GetResult();
+            valueTask.AsTask()
+                     .GetAwaiter()
+                     .GetResult();
     }
 
     /// <summary>
@@ -78,7 +86,9 @@ public static class ValueTaskExtension
     /// </remarks>
     public static void AwaitSyncSafe(this System.Threading.Tasks.ValueTask valueTask, CancellationToken cancellationToken = default)
     {
-        Task.Run(async () => await valueTask.NoSync(), cancellationToken).GetAwaiter().GetResult();
+        Task.Run(async () => await valueTask.NoSync(), cancellationToken)
+            .GetAwaiter()
+            .GetResult();
     }
 
     /// <summary>
@@ -97,6 +107,8 @@ public static class ValueTaskExtension
     /// </remarks>
     public static T AwaitSyncSafe<T>(this ValueTask<T> valueTask, CancellationToken cancellationToken = default)
     {
-        return Task.Run(async () => await valueTask.NoSync(), cancellationToken).GetAwaiter().GetResult();
+        return Task.Run(async () => await valueTask.NoSync(), cancellationToken)
+                   .GetAwaiter()
+                   .GetResult();
     }
 }
