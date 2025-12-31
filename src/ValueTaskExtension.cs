@@ -111,4 +111,28 @@ public static class ValueTaskExtension
                    .GetAwaiter()
                    .GetResult();
     }
+
+    /// <summary>
+    /// Executes the specified ValueTask in a fire-and-forget manner, optionally invoking a callback if an exception
+    /// occurs.
+    /// </summary>
+    /// <remarks>Use this method to start a ValueTask without awaiting it, such as for background operations
+    /// where the result is not needed. Exceptions thrown by the ValueTask are not propagated; instead, they are passed
+    /// to the onException callback if provided. This method should be used with care, as unhandled exceptions may be
+    /// silently ignored if no callback is specified.</remarks>
+    /// <param name="valueTask">The ValueTask to execute asynchronously without awaiting its completion.</param>
+    /// <param name="onException">An optional callback to invoke if the ValueTask completes with an exception. The callback receives the base
+    /// exception as its argument. If null, exceptions are ignored.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void FireAndForgetSafe(this System.Threading.Tasks.ValueTask valueTask, Action<Exception>? onException = null)
+    {
+        if (valueTask.IsCompletedSuccessfully)
+            return;
+
+        _ = valueTask.AsTask().ContinueWith(t =>
+        {
+            if (t.Exception is { } ex)
+                onException?.Invoke(ex.GetBaseException());
+        }, TaskContinuationOptions.OnlyOnFaulted);
+    }
 }
