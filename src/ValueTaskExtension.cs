@@ -161,4 +161,54 @@ public static class ValueTaskExtension
             TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
     }
+
+    /// <summary>
+    /// Executes the specified ValueTask{T} in a fire-and-forget manner, optionally handling any exceptions that occur
+    /// during its execution.
+    /// </summary>
+    /// <remarks>This method allows a ValueTask{T} to be executed asynchronously without awaiting its result.
+    /// Use this method when the result of the task is not needed and exceptions should be handled via the provided
+    /// callback or ignored. Exceptions that occur after the method returns are not propagated to the caller and must be
+    /// handled by the onException callback if provided.</remarks>
+    /// <typeparam name="T">The type of the result produced by the ValueTask.</typeparam>
+    /// <param name="valueTask">The ValueTask{T} to execute without awaiting its completion.</param>
+    /// <param name="onException">An optional callback that is invoked if the ValueTask{T} throws an exception. If null, exceptions are ignored.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void FireAndForgetSafe<T>(this ValueTask<T> valueTask, Action<Exception>? onException = null)
+    {
+        // Note, we cannot DRY this method because ValueTask<T> -> ValueTask is not free.
+
+        if (valueTask.IsCompletedSuccessfully)
+        {
+            _ = valueTask.Result; // consume result
+            return;
+        }
+
+        var awaiter = valueTask.GetAwaiter();
+
+        if (awaiter.IsCompleted)
+        {
+            try
+            {
+                _ = awaiter.GetResult(); // immediate; does not block here
+            }
+            catch (Exception ex)
+            {
+                onException?.Invoke(ex);
+            }
+
+            return;
+        }
+
+        _ = valueTask.AsTask().ContinueWith(
+            static (t, state) =>
+            {
+                var ex = t.Exception!.GetBaseException();
+                ((Action<Exception>?)state)?.Invoke(ex);
+            },
+            onException,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+    }
 }
