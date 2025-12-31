@@ -126,13 +126,39 @@ public static class ValueTaskExtension
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void FireAndForgetSafe(this System.Threading.Tasks.ValueTask valueTask, Action<Exception>? onException = null)
     {
+        // Fast path: completed successfully => nothing to do, no allocations
         if (valueTask.IsCompletedSuccessfully)
             return;
 
-        _ = valueTask.AsTask().ContinueWith(t =>
+        var awaiter = valueTask.GetAwaiter();
+
+        // Completed (faulted/canceled or rare non-success completion) => handle synchronously, no allocations
+        if (awaiter.IsCompleted)
         {
-            if (t.Exception is { } ex)
-                onException?.Invoke(ex.GetBaseException());
-        }, TaskContinuationOptions.OnlyOnFaulted);
+            try
+            {
+                awaiter.GetResult(); // will throw immediately if faulted/canceled (does NOT block here)
+            }
+            catch (Exception ex)
+            {
+                onException?.Invoke(ex);
+            }
+
+            return;
+        }
+
+        // Not completed: must observe completion later
+        // AsTask() MAY allocate if ValueTaskSource-backed (unavoidable for true fire-and-forget)
+        _ = valueTask.AsTask().ContinueWith(
+            static (t, state) =>
+            {
+                // OnlyOnFaulted guarantees Exception is non-null, but keep it tight anyway
+                var ex = t.Exception!.GetBaseException();
+                ((Action<Exception>?)state)?.Invoke(ex);
+            },
+            onException,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 }
