@@ -48,11 +48,8 @@ public static class ValueTaskExtension
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static T AwaitSync<T>(this ValueTask<T> valueTask)
     {
-        return valueTask.IsCompletedSuccessfully
-            ? valueTask.Result
-            : valueTask.AsTask()
-                       .GetAwaiter()
-                       .GetResult();
+        return valueTask.GetAwaiter()
+                        .GetResult();
     }
 
     /// <summary>
@@ -66,10 +63,8 @@ public static class ValueTaskExtension
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void AwaitSync(this System.Threading.Tasks.ValueTask valueTask)
     {
-        if (!valueTask.IsCompletedSuccessfully)
-            valueTask.AsTask()
-                     .GetAwaiter()
-                     .GetResult();
+        valueTask.GetAwaiter()
+                 .GetResult();
     }
 
     /// <summary>
@@ -84,8 +79,16 @@ public static class ValueTaskExtension
     /// This method should be used when asynchronous code must be waited on from synchronous contexts, such as in constructors or legacy APIs,
     /// without risking deadlocks commonly caused by synchronization context capture (e.g., UI threads or ASP.NET).
     /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void AwaitSyncSafe(this System.Threading.Tasks.ValueTask valueTask, CancellationToken cancellationToken = default)
     {
+        if (valueTask.IsCompleted)
+        {
+            valueTask.GetAwaiter()
+                     .GetResult(); // observe (cheap)
+            return;
+        }
+
         Task.Run(async () => await valueTask.NoSync(), cancellationToken)
             .GetAwaiter()
             .GetResult();
@@ -105,8 +108,12 @@ public static class ValueTaskExtension
     /// This method is useful when you must synchronously retrieve the result of asynchronous code, such as in library code or integration with legacy systems,
     /// without risking deadlocks due to synchronization context capture.
     /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static T AwaitSyncSafe<T>(this ValueTask<T> valueTask, CancellationToken cancellationToken = default)
     {
+        if (valueTask.IsCompleted)
+            return valueTask.Result;
+
         return Task.Run(async () => await valueTask.NoSync(), cancellationToken)
                    .GetAwaiter()
                    .GetResult();
@@ -126,18 +133,17 @@ public static class ValueTaskExtension
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void FireAndForgetSafe(this System.Threading.Tasks.ValueTask valueTask, Action<Exception>? onException = null)
     {
-        // Fast path: completed successfully => nothing to do, no allocations
         if (valueTask.IsCompletedSuccessfully)
             return;
 
-        var awaiter = valueTask.GetAwaiter();
+        ValueTaskAwaiter awaiter = valueTask.GetAwaiter();
 
-        // Completed (faulted/canceled or rare non-success completion) => handle synchronously, no allocations
+        // Completed (faulted/canceled) => observe synchronously, no allocations
         if (awaiter.IsCompleted)
         {
             try
             {
-                awaiter.GetResult(); // will throw immediately if faulted/canceled (does NOT block here)
+                awaiter.GetResult();
             }
             catch (Exception ex)
             {
@@ -147,19 +153,20 @@ public static class ValueTaskExtension
             return;
         }
 
-        // Not completed: must observe completion later
-        // AsTask() MAY allocate if ValueTaskSource-backed (unavoidable for true fire-and-forget)
-        _ = valueTask.AsTask().ContinueWith(
-            static (t, state) =>
-            {
-                // OnlyOnFaulted guarantees Exception is non-null, but keep it tight anyway
-                var ex = t.Exception!.GetBaseException();
-                ((Action<Exception>?)state)?.Invoke(ex);
-            },
-            onException,
-            CancellationToken.None,
-            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
+        // Not completed: must observe later (allocations are unavoidable here)
+        Observe(valueTask, onException);
+    }
+
+    private static async void Observe(System.Threading.Tasks.ValueTask vt, Action<Exception>? handler)
+    {
+        try
+        {
+            await vt.NoSync();
+        }
+        catch (Exception ex)
+        {
+            handler?.Invoke(ex);
+        }
     }
 
     /// <summary>
@@ -176,21 +183,19 @@ public static class ValueTaskExtension
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void FireAndForgetSafe<T>(this ValueTask<T> valueTask, Action<Exception>? onException = null)
     {
-        // Note, we cannot DRY this method because ValueTask<T> -> ValueTask is not free.
-
         if (valueTask.IsCompletedSuccessfully)
         {
             _ = valueTask.Result; // consume result
             return;
         }
 
-        var awaiter = valueTask.GetAwaiter();
+        ValueTaskAwaiter<T> awaiter = valueTask.GetAwaiter();
 
         if (awaiter.IsCompleted)
         {
             try
             {
-                _ = awaiter.GetResult(); // immediate; does not block here
+                _ = awaiter.GetResult();
             }
             catch (Exception ex)
             {
@@ -200,15 +205,19 @@ public static class ValueTaskExtension
             return;
         }
 
-        _ = valueTask.AsTask().ContinueWith(
-            static (t, state) =>
-            {
-                var ex = t.Exception!.GetBaseException();
-                ((Action<Exception>?)state)?.Invoke(ex);
-            },
-            onException,
-            CancellationToken.None,
-            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
+        // Not completed: must observe later (this will allocate; unavoidable).
+        Observe(valueTask, onException);
+    }
+
+    private static async void Observe<T>(ValueTask<T> vt, Action<Exception>? handler)
+    {
+        try
+        {
+            _ = await vt.NoSync();
+        }
+        catch (Exception ex)
+        {
+            handler?.Invoke(ex);
+        }
     }
 }
