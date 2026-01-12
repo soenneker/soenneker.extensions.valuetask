@@ -1,3 +1,4 @@
+using Soenneker.Extensions.ValueTask.Utils;
 using System;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -6,78 +7,77 @@ using System.Threading.Tasks;
 namespace Soenneker.Extensions.ValueTask;
 
 /// <summary>
-/// A collection of helpful ValueTask extension methods
+/// A collection of high-performance extension methods for working with <see cref="ValueTask"/> and <see cref="ValueTask{TResult}"/>.
+/// These helpers focus on avoiding synchronization-context capture, minimizing allocations, and safely bridging
+/// asynchronous code into synchronous execution when required.
 /// </summary>
 public static class ValueTaskExtension
 {
     /// <summary>
-    /// Configures an awaiter used to await this <see cref="ValueTask"/> to continue on a different context.
-    /// Equivalent to <code>valueTask.ConfigureAwait(false);</code>.
+    /// Configures an awaiter for the specified <see cref="ValueTask"/> that does not capture
+    /// the current synchronization context.
+    /// Equivalent to calling <c>ConfigureAwait(false)</c>.
     /// </summary>
     /// <param name="valueTask">The <see cref="ValueTask"/> to configure.</param>
-    /// <returns>A configured awaitable.</returns>
+    /// <returns>A configured awaitable that will not resume on the captured context.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static ConfiguredValueTaskAwaitable NoSync(this System.Threading.Tasks.ValueTask valueTask)
-    {
-        return valueTask.ConfigureAwait(false);
-    }
+    public static ConfiguredValueTaskAwaitable NoSync(this System.Threading.Tasks.ValueTask valueTask) => valueTask.ConfigureAwait(false);
 
     /// <summary>
-    /// Configures an awaiter used to await this <see cref="ValueTask{T}"/> to continue on a different context.
-    /// Equivalent to <code>valueTask.ConfigureAwait(false);</code>.
+    /// Configures an awaiter for the specified <see cref="ValueTask{TResult}"/> that does not capture
+    /// the current synchronization context.
+    /// Equivalent to calling <c>ConfigureAwait(false)</c>.
     /// </summary>
-    /// <typeparam name="T">The type of the result produced by this <see cref="ValueTask{T}"/>.</typeparam>
-    /// <param name="valueTask">The <see cref="ValueTask{T}"/> to configure.</param>
-    /// <returns>A configured awaitable.</returns>
+    /// <typeparam name="T">The result type of the <see cref="ValueTask{TResult}"/>.</typeparam>
+    /// <param name="valueTask">The <see cref="ValueTask{TResult}"/> to configure.</param>
+    /// <returns>A configured awaitable that will not resume on the captured context.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static ConfiguredValueTaskAwaitable<T> NoSync<T>(this ValueTask<T> valueTask)
-    {
-        return valueTask.ConfigureAwait(false);
-    }
+    public static ConfiguredValueTaskAwaitable<T> NoSync<T>(this ValueTask<T> valueTask) => valueTask.ConfigureAwait(false);
 
     /// <summary>
-    /// Synchronously runs the specified <see cref="ValueTask{TResult}"/> and returns its result.
+    /// Synchronously blocks until the specified <see cref="ValueTask{TResult}"/> completes
+    /// and returns its result.
     /// </summary>
-    /// <typeparam name="T">The result type of the <see cref="ValueTask{T}"/>.</typeparam>
-    /// <param name="valueTask">The <see cref="ValueTask{T}"/> to run synchronously.</param>
-    /// <returns>The result of the completed <see cref="ValueTask{T}"/>.</returns>
+    /// <typeparam name="T">The result type of the <see cref="ValueTask{TResult}"/>.</typeparam>
+    /// <param name="valueTask">The <see cref="ValueTask{TResult}"/> to wait on.</param>
+    /// <returns>The result of the completed operation.</returns>
     /// <remarks>
-    /// If the <see cref="ValueTask{T}"/> has not yet completed, this method will block the calling thread
-    /// until it does. This may lead to deadlocks if called on a context that does not allow synchronous blocking.
+    /// This method will synchronously block the calling thread and may cause deadlocks
+    /// if invoked on a thread with a synchronization context (e.g., UI or ASP.NET).
+    /// Prefer <see cref="AwaitSyncSafe{T}(ValueTask{T}, CancellationToken)"/> when safety is required.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static T AwaitSync<T>(this ValueTask<T> valueTask)
-    {
-        return valueTask.GetAwaiter()
-                        .GetResult();
-    }
+    public static T AwaitSync<T>(this ValueTask<T> valueTask) => valueTask.GetAwaiter()
+                                                                          .GetResult();
 
     /// <summary>
-    /// Synchronously runs the specified <see cref="ValueTask"/>.
+    /// Synchronously blocks until the specified <see cref="ValueTask"/> completes.
     /// </summary>
-    /// <param name="valueTask">The <see cref="ValueTask"/> to run synchronously.</param>
+    /// <param name="valueTask">The <see cref="ValueTask"/> to wait on.</param>
     /// <remarks>
-    /// If the <see cref="ValueTask"/> has not yet completed, this method will block the calling thread
-    /// until it does. This may lead to deadlocks if called on a context that does not allow synchronous blocking.
+    /// This method will synchronously block the calling thread and may cause deadlocks
+    /// if invoked on a thread with a synchronization context (e.g., UI or ASP.NET).
+    /// Prefer <see cref="AwaitSyncSafe(ValueTask, CancellationToken)"/> when safety is required.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void AwaitSync(this System.Threading.Tasks.ValueTask valueTask)
-    {
-        valueTask.GetAwaiter()
-                 .GetResult();
-    }
+    public static void AwaitSync(this System.Threading.Tasks.ValueTask valueTask) => valueTask.GetAwaiter()
+                                                                                              .GetResult();
 
     /// <summary>
-    /// Synchronously waits for a <see cref="ValueTask"/> to complete in a safe manner,
-    /// avoiding deadlocks by offloading the execution to a background thread and not capturing the synchronization context.
+    /// Synchronously waits for a <see cref="ValueTask"/> to complete while avoiding
+    /// synchronization-context deadlocks.
     /// </summary>
-    /// <param name="valueTask">The <see cref="ValueTask"/> to wait for.</param>
-    /// <param name="cancellationToken">An optional <see cref="CancellationToken"/> to cancel the background operation.</param>
-    /// <exception cref="OperationCanceledException">Thrown if the operation is canceled via the provided token.</exception>
-    /// <exception cref="AggregateException">Thrown if the task faults; inner exceptions contain the actual errors.</exception>
+    /// <param name="valueTask">The <see cref="ValueTask"/> to wait on.</param>
+    /// <param name="cancellationToken">
+    /// An optional <see cref="CancellationToken"/> used to cancel the wait operation.
+    /// </param>
+    /// <exception cref="OperationCanceledException">
+    /// Thrown if the provided <paramref name="cancellationToken"/> is canceled.
+    /// </exception>
     /// <remarks>
-    /// This method should be used when asynchronous code must be waited on from synchronous contexts, such as in constructors or legacy APIs,
-    /// without risking deadlocks commonly caused by synchronization context capture (e.g., UI threads or ASP.NET).
+    /// This method avoids <c>Task.Run</c> and async lambdas by registering a continuation
+    /// directly on the <see cref="ValueTask"/> awaiter and blocking until completion.
+    /// This significantly reduces allocations while remaining safe for sync-context environments.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void AwaitSyncSafe(this System.Threading.Tasks.ValueTask valueTask, CancellationToken cancellationToken = default)
@@ -85,51 +85,58 @@ public static class ValueTaskExtension
         if (valueTask.IsCompleted)
         {
             valueTask.GetAwaiter()
-                     .GetResult(); // observe (cheap)
+                     .GetResult();
             return;
         }
 
-        Task.Run(async () => await valueTask.NoSync(), cancellationToken)
-            .GetAwaiter()
-            .GetResult();
+        var state = new SyncWaitState(valueTask.GetAwaiter());
+        state.Wait(cancellationToken);
+        state.RethrowIfFaulted();
     }
 
     /// <summary>
-    /// Synchronously waits for a <see cref="ValueTask{TResult}"/> to complete and returns its result in a safe manner,
-    /// avoiding deadlocks by offloading the execution to a background thread and not capturing the synchronization context.
+    /// Synchronously waits for a <see cref="ValueTask{TResult}"/> to complete while avoiding
+    /// synchronization-context deadlocks and returns its result.
     /// </summary>
     /// <typeparam name="T">The result type of the <see cref="ValueTask{TResult}"/>.</typeparam>
-    /// <param name="valueTask">The <see cref="ValueTask{TResult}"/> to wait for.</param>
-    /// <param name="cancellationToken">An optional <see cref="CancellationToken"/> to cancel the background operation.</param>
-    /// <returns>The result of the completed task.</returns>
-    /// <exception cref="OperationCanceledException">Thrown if the operation is canceled via the provided token.</exception>
-    /// <exception cref="AggregateException">Thrown if the task faults; inner exceptions contain the actual errors.</exception>
+    /// <param name="valueTask">The <see cref="ValueTask{TResult}"/> to wait on.</param>
+    /// <param name="cancellationToken">
+    /// An optional <see cref="CancellationToken"/> used to cancel the wait operation.
+    /// </param>
+    /// <returns>The result of the completed operation.</returns>
+    /// <exception cref="OperationCanceledException">
+    /// Thrown if the provided <paramref name="cancellationToken"/> is canceled.
+    /// </exception>
     /// <remarks>
-    /// This method is useful when you must synchronously retrieve the result of asynchronous code, such as in library code or integration with legacy systems,
-    /// without risking deadlocks due to synchronization context capture.
+    /// This method is intended for bridging asynchronous code into synchronous entry points
+    /// (e.g., constructors or legacy APIs) while minimizing allocation overhead and avoiding deadlocks.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static T AwaitSyncSafe<T>(this ValueTask<T> valueTask, CancellationToken cancellationToken = default)
     {
         if (valueTask.IsCompleted)
-            return valueTask.Result;
+            return valueTask.GetAwaiter()
+                            .GetResult();
 
-        return Task.Run(async () => await valueTask.NoSync(), cancellationToken)
-                   .GetAwaiter()
-                   .GetResult();
+        var state = new SyncWaitState<T>(valueTask.GetAwaiter());
+        state.Wait(cancellationToken);
+        return state.GetResultOrThrow();
     }
 
     /// <summary>
-    /// Executes the specified ValueTask in a fire-and-forget manner, optionally invoking a callback if an exception
-    /// occurs.
+    /// Executes the specified <see cref="ValueTask"/> in a fire-and-forget manner,
+    /// optionally invoking a callback if an exception occurs.
     /// </summary>
-    /// <remarks>Use this method to start a ValueTask without awaiting it, such as for background operations
-    /// where the result is not needed. Exceptions thrown by the ValueTask are not propagated; instead, they are passed
-    /// to the onException callback if provided. This method should be used with care, as unhandled exceptions may be
-    /// silently ignored if no callback is specified.</remarks>
-    /// <param name="valueTask">The ValueTask to execute asynchronously without awaiting its completion.</param>
-    /// <param name="onException">An optional callback to invoke if the ValueTask completes with an exception. The callback receives the base
-    /// exception as its argument. If null, exceptions are ignored.</param>
+    /// <param name="valueTask">The <see cref="ValueTask"/> to execute.</param>
+    /// <param name="onException">
+    /// An optional callback invoked if the task faults or is canceled.
+    /// If <c>null</c>, exceptions are silently ignored.
+    /// </param>
+    /// <remarks>
+    /// This method ensures that exceptions are always observed to prevent unobserved-task exceptions.
+    /// For incomplete tasks, a continuation is registered directly on the awaiter to avoid
+    /// async state machine allocations.
+    /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void FireAndForgetSafe(this System.Threading.Tasks.ValueTask valueTask, Action<Exception>? onException = null)
     {
@@ -138,7 +145,6 @@ public static class ValueTaskExtension
 
         ValueTaskAwaiter awaiter = valueTask.GetAwaiter();
 
-        // Completed (faulted/canceled) => observe synchronously, no allocations
         if (awaiter.IsCompleted)
         {
             try
@@ -153,39 +159,32 @@ public static class ValueTaskExtension
             return;
         }
 
-        // Not completed: must observe later (allocations are unavoidable here)
-        Observe(valueTask, onException);
-    }
-
-    private static async void Observe(System.Threading.Tasks.ValueTask vt, Action<Exception>? handler)
-    {
-        try
-        {
-            await vt.NoSync();
-        }
-        catch (Exception ex)
-        {
-            handler?.Invoke(ex);
-        }
+        var state = new ObserveState(awaiter, onException);
+        awaiter.UnsafeOnCompleted(state.Continue);
     }
 
     /// <summary>
-    /// Executes the specified ValueTask{T} in a fire-and-forget manner, optionally handling any exceptions that occur
-    /// during its execution.
+    /// Executes the specified <see cref="ValueTask{TResult}"/> in a fire-and-forget manner,
+    /// optionally invoking a callback if an exception occurs.
     /// </summary>
-    /// <remarks>This method allows a ValueTask{T} to be executed asynchronously without awaiting its result.
-    /// Use this method when the result of the task is not needed and exceptions should be handled via the provided
-    /// callback or ignored. Exceptions that occur after the method returns are not propagated to the caller and must be
-    /// handled by the onException callback if provided.</remarks>
-    /// <typeparam name="T">The type of the result produced by the ValueTask.</typeparam>
-    /// <param name="valueTask">The ValueTask{T} to execute without awaiting its completion.</param>
-    /// <param name="onException">An optional callback that is invoked if the ValueTask{T} throws an exception. If null, exceptions are ignored.</param>
+    /// <typeparam name="T">The result type of the <see cref="ValueTask{TResult}"/>.</typeparam>
+    /// <param name="valueTask">The <see cref="ValueTask{TResult}"/> to execute.</param>
+    /// <param name="onException">
+    /// An optional callback invoked if the task faults or is canceled.
+    /// If <c>null</c>, exceptions are silently ignored.
+    /// </param>
+    /// <remarks>
+    /// The task result is always consumed to ensure proper completion semantics.
+    /// Incomplete tasks are observed via a continuation attached directly to the awaiter
+    /// to minimize allocations.
+    /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void FireAndForgetSafe<T>(this ValueTask<T> valueTask, Action<Exception>? onException = null)
     {
         if (valueTask.IsCompletedSuccessfully)
         {
-            _ = valueTask.Result; // consume result
+            _ = valueTask.GetAwaiter()
+                         .GetResult();
             return;
         }
 
@@ -205,19 +204,7 @@ public static class ValueTaskExtension
             return;
         }
 
-        // Not completed: must observe later (this will allocate; unavoidable).
-        Observe(valueTask, onException);
-    }
-
-    private static async void Observe<T>(ValueTask<T> vt, Action<Exception>? handler)
-    {
-        try
-        {
-            _ = await vt.NoSync();
-        }
-        catch (Exception ex)
-        {
-            handler?.Invoke(ex);
-        }
+        var state = new ObserveState<T>(awaiter, onException);
+        awaiter.UnsafeOnCompleted(state.Continue);
     }
 }
