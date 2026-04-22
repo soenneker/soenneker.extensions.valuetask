@@ -2,19 +2,18 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using AwesomeAssertions;
-using Xunit;
 
 namespace Soenneker.Extensions.ValueTask.Tests;
 
 public class ValueTaskExtensionTests
 {
-    [Fact]
+    [Test]
     public void Default()
     {
 
     }
 
-    [Fact]
+    [Test]
     public void AwaitSyncSafe_ShouldCompleteSuccessfully_WhenValueTaskCompletes()
     {
         // Arrange
@@ -27,7 +26,7 @@ public class ValueTaskExtensionTests
         act.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void AwaitSyncSafe_ShouldReturnResult_WhenValueTaskOfTCompletes()
     {
         // Arrange
@@ -40,7 +39,7 @@ public class ValueTaskExtensionTests
         result.Should().Be(42);
     }
 
-    [Fact]
+    [Test]
     public void AwaitSyncSafe_ShouldThrowException_WhenValueTaskThrows()
     {
         // Arrange
@@ -53,7 +52,7 @@ public class ValueTaskExtensionTests
         act.Should().Throw<InvalidOperationException>().WithMessage("bad");
     }
 
-    [Fact]
+    [Test]
     public void AwaitSyncSafe_ShouldThrowException_WhenValueTaskOfTThrows()
     {
         // Arrange
@@ -66,7 +65,7 @@ public class ValueTaskExtensionTests
         act.Should().Throw<ArgumentNullException>().WithParameterName("param");
     }
 
-    [Fact]
+    [Test]
     public void AwaitSyncSafe_ShouldHonorCancellationToken()
     {
         // Arrange
@@ -82,7 +81,7 @@ public class ValueTaskExtensionTests
         act.Should().Throw<OperationCanceledException>();
     }
 
-    [Fact]
+    [Test]
     public void AwaitSyncSafe_TOfT_ShouldHonorCancellationToken()
     {
         // Arrange
