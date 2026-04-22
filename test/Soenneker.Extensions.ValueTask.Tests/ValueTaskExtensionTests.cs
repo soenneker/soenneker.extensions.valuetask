@@ -17,7 +17,7 @@ public class ValueTaskExtensionTests
     public void AwaitSyncSafe_ShouldCompleteSuccessfully_WhenValueTaskCompletes()
     {
         // Arrange
-        System.Threading.Tasks.ValueTask task = new System.Threading.Tasks.ValueTask(Task.Delay(50, TestContext.Current.CancellationToken));
+        System.Threading.Tasks.ValueTask task = new System.Threading.Tasks.ValueTask(Task.Delay(50, CancellationToken.None));
 
         // Act
         Action act = () => task.AwaitSyncSafe();
@@ -33,7 +33,7 @@ public class ValueTaskExtensionTests
         ValueTask<int> task = new ValueTask<int>(42);
 
         // Act
-        int result = task.AwaitSyncSafe(TestContext.Current.CancellationToken);
+        int result = task.AwaitSyncSafe(CancellationToken.None);
 
         // Assert
         result.Should().Be(42);
