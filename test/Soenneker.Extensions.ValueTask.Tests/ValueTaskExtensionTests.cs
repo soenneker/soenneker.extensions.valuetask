@@ -96,4 +96,19 @@ public class ValueTaskExtensionTests
         // Assert
         act.Should().Throw<OperationCanceledException>();
     }
+
+    [Test]
+    public void AwaitSyncSafe_CancelledWait_CanCompleteUnderlyingOperationLater()
+    {
+        var source = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var valueTask = new System.Threading.Tasks.ValueTask(source.Task);
+
+        Action wait = () => valueTask.AwaitSyncSafe(cts.Token);
+        wait.Should().Throw<OperationCanceledException>();
+
+        Action complete = source.SetResult;
+        complete.Should().NotThrow();
+    }
 }

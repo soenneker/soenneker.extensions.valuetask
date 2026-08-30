@@ -7,10 +7,11 @@ namespace Soenneker.Extensions.ValueTask.Utils;
 internal sealed class SyncWaitState
 {
     private readonly ManualResetEventSlim _mres = new(false);
-    private ValueTaskAwaiter _awaiter;
+    private ConfiguredValueTaskAwaitable.ConfiguredValueTaskAwaiter _awaiter;
     private Exception? _exception;
+    private int _completionState;
 
-    public SyncWaitState(ValueTaskAwaiter awaiter)
+    public SyncWaitState(ConfiguredValueTaskAwaitable.ConfiguredValueTaskAwaiter awaiter)
     {
         _awaiter = awaiter;
         _awaiter.UnsafeOnCompleted(Continue);
@@ -29,6 +30,9 @@ internal sealed class SyncWaitState
         finally
         {
             _mres.Set();
+
+            if (Interlocked.CompareExchange(ref _completionState, 1, 0) == 2)
+                _mres.Dispose();
         }
     }
 
@@ -41,7 +45,17 @@ internal sealed class SyncWaitState
             return;
         }
 
-        _mres.Wait(cancellationToken);
+        try
+        {
+            _mres.Wait(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            if (Interlocked.CompareExchange(ref _completionState, 2, 0) == 1)
+                _mres.Dispose();
+
+            throw;
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

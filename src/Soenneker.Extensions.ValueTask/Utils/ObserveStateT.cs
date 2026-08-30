@@ -5,10 +5,10 @@ namespace Soenneker.Extensions.ValueTask.Utils;
 
 internal sealed class ObserveState<T>
 {
-    private ValueTaskAwaiter<T> _awaiter;
+    private ConfiguredValueTaskAwaitable<T>.ConfiguredValueTaskAwaiter _awaiter;
     private readonly Action<Exception>? _handler;
 
-    public ObserveState(ValueTaskAwaiter<T> awaiter, Action<Exception>? handler)
+    public ObserveState(ConfiguredValueTaskAwaitable<T>.ConfiguredValueTaskAwaiter awaiter, Action<Exception>? handler)
     {
         _awaiter = awaiter;
         _handler = handler;
@@ -22,7 +22,13 @@ internal sealed class ObserveState<T>
         }
         catch (Exception ex)
         {
-            _handler?.Invoke(ex);
+            try
+            {
+                _handler?.Invoke(ex);
+            }
+            catch
+            {
+            }
         }
     }
 }

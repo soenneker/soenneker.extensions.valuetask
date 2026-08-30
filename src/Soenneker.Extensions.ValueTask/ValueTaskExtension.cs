@@ -57,7 +57,7 @@ public static class ValueTaskExtension
     /// <remarks>
     /// This method will synchronously block the calling thread and may cause deadlocks
     /// if invoked on a thread with a synchronization context (e.g., UI or ASP.NET).
-    /// Prefer <see cref="AwaitSyncSafe(ValueTask, CancellationToken)"/> when safety is required.
+    /// Prefer <see cref="AwaitSyncSafe(System.Threading.Tasks.ValueTask, CancellationToken)"/> when a synchronous bridge is unavoidable.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void AwaitSync(this System.Threading.Tasks.ValueTask valueTask) => valueTask.GetAwaiter()
@@ -77,7 +77,7 @@ public static class ValueTaskExtension
     /// <remarks>
     /// This method avoids <c>Task.Run</c> and async lambdas by registering a continuation
     /// directly on the <see cref="ValueTask"/> awaiter and blocking until completion.
-    /// This significantly reduces allocations while remaining safe for sync-context environments.
+    /// The registered continuation does not capture the current synchronization context. The method still blocks a thread.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void AwaitSyncSafe(this System.Threading.Tasks.ValueTask valueTask, CancellationToken cancellationToken = default)
@@ -89,7 +89,7 @@ public static class ValueTaskExtension
             return;
         }
 
-        var state = new SyncWaitState(valueTask.GetAwaiter());
+        var state = new SyncWaitState(valueTask.ConfigureAwait(false).GetAwaiter());
         state.Wait(cancellationToken);
         state.RethrowIfFaulted();
     }
@@ -118,7 +118,7 @@ public static class ValueTaskExtension
             return valueTask.GetAwaiter()
                             .GetResult();
 
-        var state = new SyncWaitState<T>(valueTask.GetAwaiter());
+        var state = new SyncWaitState<T>(valueTask.ConfigureAwait(false).GetAwaiter());
         state.Wait(cancellationToken);
         return state.GetResultOrThrow();
     }
@@ -143,7 +143,7 @@ public static class ValueTaskExtension
         if (valueTask.IsCompletedSuccessfully)
             return;
 
-        ValueTaskAwaiter awaiter = valueTask.GetAwaiter();
+        ConfiguredValueTaskAwaitable.ConfiguredValueTaskAwaiter awaiter = valueTask.ConfigureAwait(false).GetAwaiter();
 
         if (awaiter.IsCompleted)
         {
@@ -153,7 +153,7 @@ public static class ValueTaskExtension
             }
             catch (Exception ex)
             {
-                onException?.Invoke(ex);
+                InvokeExceptionHandler(onException, ex);
             }
 
             return;
@@ -188,7 +188,7 @@ public static class ValueTaskExtension
             return;
         }
 
-        ValueTaskAwaiter<T> awaiter = valueTask.GetAwaiter();
+        ConfiguredValueTaskAwaitable<T>.ConfiguredValueTaskAwaiter awaiter = valueTask.ConfigureAwait(false).GetAwaiter();
 
         if (awaiter.IsCompleted)
         {
@@ -198,7 +198,7 @@ public static class ValueTaskExtension
             }
             catch (Exception ex)
             {
-                onException?.Invoke(ex);
+                InvokeExceptionHandler(onException, ex);
             }
 
             return;
@@ -206,5 +206,21 @@ public static class ValueTaskExtension
 
         var state = new ObserveState<T>(awaiter, onException);
         awaiter.UnsafeOnCompleted(state.Continue);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void InvokeExceptionHandler(Action<Exception>? handler, Exception exception)
+    {
+        if (handler is null)
+            return;
+
+        try
+        {
+            handler(exception);
+        }
+        catch
+        {
+            // Detached diagnostics must not create another unobserved or unhandled failure.
+        }
     }
 }
