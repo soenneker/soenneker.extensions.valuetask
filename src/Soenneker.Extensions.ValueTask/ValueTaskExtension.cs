@@ -141,7 +141,10 @@ public static class ValueTaskExtension
     public static void FireAndForgetSafe(this System.Threading.Tasks.ValueTask valueTask, Action<Exception>? onException = null)
     {
         if (valueTask.IsCompletedSuccessfully)
+        {
+            valueTask.GetAwaiter().GetResult();
             return;
+        }
 
         ConfiguredValueTaskAwaitable.ConfiguredValueTaskAwaiter awaiter = valueTask.ConfigureAwait(false).GetAwaiter();
 
